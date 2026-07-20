@@ -1,9 +1,9 @@
-const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
+const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion } = require('@whiskeysockets/baileys');
 const express = require('express');
 const pino = require('pino');
 const axios = require('axios');
 
-// --- ANTI CRASH: Mencegah server mati jika ada error dari WhatsApp ---
+// --- ANTI CRASH ---
 process.on('uncaughtException', console.error);
 process.on('unhandledRejection', console.error);
 
@@ -20,20 +20,27 @@ app.listen(port, () => {
 
 const WEB_APP_URL = process.env.WEB_APP_URL;
 
-// --- GANTI DENGAN NOMOR WA ANDA DI BAWAH INI ---
+// --- GANTI DENGAN NOMOR WA ANDA ---
 const phoneNumber = '6285157855742'; 
+let pairingCodeRequested = false; // Mencegah bot melakukan spam request
 
 async function connectToWhatsApp() {
     const { state, saveCreds } = await useMultiFileAuthState('auth_info_baileys');
+    
+    // Mengambil versi WA terbaru agar tidak ditolak server
+    const { version } = await fetchLatestBaileysVersion();
 
     const sock = makeWASocket({
+        version,
         auth: state,
         logger: pino({ level: "silent" }),
-        browser: ['BotKasRT', 'Chrome', '1.0.0']
+        browser: ['BotKasRT', 'Chrome', '1.0.0'],
+        printQRInTerminal: false
     });
 
-    // Meminta Pairing Code dengan pengamanan Try-Catch
-    if (!sock.authState.creds.registered) {
+    // Meminta Pairing Code HANYA SATU KALI
+    if (!sock.authState.creds.registered && !pairingCodeRequested) {
+        pairingCodeRequested = true;
         console.log("Menyiapkan permintaan Pairing Code...");
         
         setTimeout(async () => {
@@ -44,9 +51,10 @@ async function connectToWhatsApp() {
                 console.log(`Masukkan di WA: Perangkat Tertaut > Tautkan perangkat > Tautkan dengan nomor telepon`);
                 console.log(`=========================================\n`);
             } catch (error) {
-                console.log(`Gagal meminta kode, bot akan mencoba lagi secara otomatis...`);
+                console.log(`Gagal meminta kode: ${error.message}`);
+                pairingCodeRequested = false; // Reset jika gagal
             }
-        }, 6000); 
+        }, 5000); 
     }
 
     sock.ev.on('creds.update', saveCreds);
@@ -56,7 +64,7 @@ async function connectToWhatsApp() {
         
         if (connection === 'close') {
             const shouldReconnect = lastDisconnect.error?.output?.statusCode !== DisconnectReason.loggedOut;
-            console.log('Koneksi terputus, mencoba menyambung kembali dalam 3 detik...');
+            console.log('Koneksi terputus, mencoba menyambung kembali...');
             if (shouldReconnect) {
                 setTimeout(connectToWhatsApp, 3000);
             }
