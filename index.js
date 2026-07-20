@@ -2,6 +2,7 @@ const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLat
 const express = require('express');
 const pino = require('pino');
 const axios = require('axios');
+const qrcode = require('qrcode-terminal'); // Menggunakan qrcode-terminal
 
 // --- ANTI CRASH ---
 process.on('uncaughtException', console.error);
@@ -20,14 +21,8 @@ app.listen(port, () => {
 
 const WEB_APP_URL = process.env.WEB_APP_URL;
 
-// --- GANTI DENGAN NOMOR WA ANDA ---
-const phoneNumber = '6285882068207'; 
-let pairingCodeRequested = false; // Mencegah bot melakukan spam request
-
 async function connectToWhatsApp() {
     const { state, saveCreds } = await useMultiFileAuthState('auth_info_baileys');
-    
-    // Mengambil versi WA terbaru agar tidak ditolak server
     const { version } = await fetchLatestBaileysVersion();
 
     const sock = makeWASocket({
@@ -35,33 +30,22 @@ async function connectToWhatsApp() {
         auth: state,
         logger: pino({ level: "silent" }),
         browser: ['BotKasRT', 'Chrome', '1.0.0'],
-        printQRInTerminal: false
+        printQRInTerminal: false // Kita matikan bawaan Baileys, kita render manual di bawah
     });
-
-    // Meminta Pairing Code HANYA SATU KALI
-    if (!sock.authState.creds.registered && !pairingCodeRequested) {
-        pairingCodeRequested = true;
-        console.log("Menyiapkan permintaan Pairing Code...");
-        
-        setTimeout(async () => {
-            try {
-                const code = await sock.requestPairingCode(phoneNumber);
-                console.log(`\n=========================================`);
-                console.log(`SALIN PAIRING CODE INI: ${code}`);
-                console.log(`Masukkan di WA: Perangkat Tertaut > Tautkan perangkat > Tautkan dengan nomor telepon`);
-                console.log(`=========================================\n`);
-            } catch (error) {
-                console.log(`Gagal meminta kode: ${error.message}`);
-                pairingCodeRequested = false; // Reset jika gagal
-            }
-        }, 5000); 
-    }
 
     sock.ev.on('creds.update', saveCreds);
 
     sock.ev.on('connection.update', (update) => {
-        const { connection, lastDisconnect } = update;
+        const { connection, lastDisconnect, qr } = update;
         
+        // --- MENAMPILKAN QR CODE ---
+        if (qr) {
+            console.log('\n=========================================');
+            console.log('SCAN QR CODE DI BAWAH INI DENGAN WHATSAPP:');
+            qrcode.generate(qr, { small: true });
+            console.log('=========================================\n');
+        }
+
         if (connection === 'close') {
             const shouldReconnect = lastDisconnect.error?.output?.statusCode !== DisconnectReason.loggedOut;
             console.log('Koneksi terputus, mencoba menyambung kembali...');
