@@ -91,7 +91,8 @@ async function connectToWhatsApp() {
             }
             
             const payload = {
-                tanggal: new Date().toLocaleDateString(),
+                // Mengambil tanggal dan waktu sesuai zona waktu WIB
+                tanggal: new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' }),
                 tipe: parts[1],
                 nominal: parts[2],
                 keterangan: parts.slice(3).join(' ')
