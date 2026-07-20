@@ -3,9 +3,12 @@ const express = require('express');
 const pino = require('pino');
 const axios = require('axios');
 
-// Setup Express (Agar Render tidak menganggap bot mati)
+// --- ANTI CRASH: Mencegah server mati jika ada error dari WhatsApp ---
+process.on('uncaughtException', console.error);
+process.on('unhandledRejection', console.error);
+
 const app = express();
-const port = process.env.PORT || 3000;
+const port = process.env.PORT || 10000;
 
 app.get('/', (req, res) => {
     res.send('Bot Kas RT Berjalan!');
@@ -15,8 +18,10 @@ app.listen(port, () => {
     console.log(`Server web berjalan di port ${port}`);
 });
 
-// URL Google Apps Script dari Environment Variables
 const WEB_APP_URL = process.env.WEB_APP_URL;
+
+// --- GANTI DENGAN NOMOR WA ANDA DI BAWAH INI ---
+const phoneNumber = '6285157855742'; 
 
 async function connectToWhatsApp() {
     const { state, saveCreds } = await useMultiFileAuthState('auth_info_baileys');
@@ -27,18 +32,21 @@ async function connectToWhatsApp() {
         browser: ['BotKasRT', 'Chrome', '1.0.0']
     });
 
-    // --- LOGIKA PAIRING CODE ---
+    // Meminta Pairing Code dengan pengamanan Try-Catch
     if (!sock.authState.creds.registered) {
-        // GANTI nomor ini dengan nomor WhatsApp Anda (format: 628xxxx)
-        const phoneNumber = '628xxxxxxxxxx'; 
+        console.log("Menyiapkan permintaan Pairing Code...");
         
         setTimeout(async () => {
-            const code = await sock.requestPairingCode(phoneNumber);
-            console.log(`=========================================`);
-            console.log(`SALIN PAIRING CODE INI: ${code}`);
-            console.log(`Masukkan di WA: Perangkat Tertaut > Tautkan perangkat > Tautkan dengan nomor telepon`);
-            console.log(`=========================================`);
-        }, 5000);
+            try {
+                const code = await sock.requestPairingCode(phoneNumber);
+                console.log(`\n=========================================`);
+                console.log(`SALIN PAIRING CODE INI: ${code}`);
+                console.log(`Masukkan di WA: Perangkat Tertaut > Tautkan perangkat > Tautkan dengan nomor telepon`);
+                console.log(`=========================================\n`);
+            } catch (error) {
+                console.log(`Gagal meminta kode, bot akan mencoba lagi secara otomatis...`);
+            }
+        }, 6000); 
     }
 
     sock.ev.on('creds.update', saveCreds);
@@ -48,14 +56,15 @@ async function connectToWhatsApp() {
         
         if (connection === 'close') {
             const shouldReconnect = lastDisconnect.error?.output?.statusCode !== DisconnectReason.loggedOut;
-            console.log('Koneksi terputus, mencoba menyambung kembali...');
-            if (shouldReconnect) connectToWhatsApp();
+            console.log('Koneksi terputus, mencoba menyambung kembali dalam 3 detik...');
+            if (shouldReconnect) {
+                setTimeout(connectToWhatsApp, 3000);
+            }
         } else if (connection === 'open') {
             console.log('Bot WhatsApp Berhasil Terhubung!');
         }
     });
 
-    // --- LOGIKA PESAN ---
     sock.ev.on('messages.upsert', async m => {
         const msg = m.messages[0];
         if (!msg.message || msg.key.fromMe) return;
