@@ -2,7 +2,7 @@ const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLat
 const express = require('express');
 const pino = require('pino');
 const axios = require('axios');
-const qrcode = require('qrcode-terminal'); // Menggunakan qrcode-terminal
+const qrcode = require('qrcode-terminal');
 
 // --- ANTI CRASH ---
 process.on('uncaughtException', console.error);
@@ -30,7 +30,7 @@ async function connectToWhatsApp() {
         auth: state,
         logger: pino({ level: "silent" }),
         browser: ['BotKasRT', 'Chrome', '1.0.0'],
-        printQRInTerminal: false // Kita matikan bawaan Baileys, kita render manual di bawah
+        printQRInTerminal: false 
     });
 
     sock.ev.on('creds.update', saveCreds);
@@ -38,7 +38,6 @@ async function connectToWhatsApp() {
     sock.ev.on('connection.update', (update) => {
         const { connection, lastDisconnect, qr } = update;
         
-        // --- MENAMPILKAN QR CODE ---
         if (qr) {
             console.log('\n=========================================');
             console.log('SCAN QR CODE DI BAWAH INI DENGAN WHATSAPP:');
@@ -59,12 +58,17 @@ async function connectToWhatsApp() {
 
     sock.ev.on('messages.upsert', async m => {
         const msg = m.messages[0];
-        if (!msg.message || msg.key.fromMe) return;
+        if (!msg.message) return;
 
         const text = (msg.message.conversation || msg.message.extendedTextMessage?.text || "").toUpperCase();
         const noWa = msg.key.remoteJid;
+        const isFromMe = msg.key.fromMe; // true jika dikirim dari nomor bot itu sendiri
+
+        // Abaikan pesan yang bukan perintah agar bot tidak merespons obrolan biasa
+        if (!text.startsWith('CATAT') && text !== 'CEK SALDO') return;
 
         if (text === 'CEK SALDO') {
+            // --- BISA DIAKSES OLEH SIAPA SAJA ---
             try {
                 const response = await axios.get(`${WEB_APP_URL}?action=ceksaldo`);
                 await sock.sendMessage(noWa, { text: response.data });
@@ -73,6 +77,13 @@ async function connectToWhatsApp() {
             }
         } 
         else if (text.startsWith('CATAT')) {
+            // --- HANYA BISA DIAKSES OLEH NOMOR BOT (ADMIN) ---
+            if (!isFromMe) {
+                // Tolak jika warga/orang lain mencoba mencatat transaksi
+                await sock.sendMessage(noWa, { text: '❌ Maaf, perintah CATAT hanya bisa dilakukan oleh Admin Kas RT.' });
+                return;
+            }
+
             const parts = text.split(' ');
             if (parts.length < 4) {
                 await sock.sendMessage(noWa, { text: 'Format salah! Gunakan: CATAT [PEMASUKAN/PENGELUARAN] [NOMINAL] [KETERANGAN]' });
