@@ -1,3 +1,13 @@
+# Folder library (tidak perlu di-upload)
 node_modules/
+
+# Folder sesi WhatsApp (sangat sensitif, jangan di-upload)
 auth_info_baileys/
+
+# File konfigurasi lingkungan
 .env
+
+# File sistem atau file sementara lainnya
+.DS_Store
+*.log
+npm-debug.log*
