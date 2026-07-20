@@ -21,7 +21,7 @@ app.listen(port, () => {
 const WEB_APP_URL = process.env.WEB_APP_URL;
 
 // --- GANTI DENGAN NOMOR WA ANDA ---
-const phoneNumber = '6285157855742'; 
+const phoneNumber = '6285882068207'; 
 let pairingCodeRequested = false; // Mencegah bot melakukan spam request
 
 async function connectToWhatsApp() {
